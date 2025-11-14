@@ -62,3 +62,8 @@ pids
 
 # Temporary files
 tmp_rovodev_*
+
+# Test files (optional - remove these lines if you want to include test files in git)
+test-mongodb.js
+test-cloudinary.js
+test-full-stack.js
