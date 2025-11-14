@@ -49,20 +49,21 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Convert file to buffer
-    const arrayBuffer = await imageFile.arrayBuffer()
-    const buffer = Buffer.from(arrayBuffer)
-
-    // Process image with Sharp
-    let processedBuffer = buffer
+    // Convert file to buffer and process with Sharp
+    const fileBuffer = await imageFile.arrayBuffer()
+    const inputBuffer = new Uint8Array(fileBuffer)
+    
+    let processedBuffer: Buffer
     try {
-      processedBuffer = await sharp(buffer)
+      // Process image with Sharp
+      processedBuffer = await sharp(inputBuffer)
         .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
         .jpeg({ quality: 85 })
         .toBuffer()
     } catch (error) {
       console.error('Image processing error:', error)
-      // Continue with original buffer if processing fails
+      // Fallback to original buffer
+      processedBuffer = Buffer.from(inputBuffer)
     }
 
     // Convert to base64 for AI analysis
