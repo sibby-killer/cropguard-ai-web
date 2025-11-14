@@ -307,3 +307,6 @@ If you need help:
 - [ ] Application deployed and working
 
 **Your CropGuard AI app is now powered by MongoDB and Cloudinary!** 🎉
+
+
+

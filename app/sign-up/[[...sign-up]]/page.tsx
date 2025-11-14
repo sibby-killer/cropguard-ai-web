@@ -109,8 +109,8 @@ export default function SignUpPage() {
                 footerActionLink: 'text-primary hover:text-primary/80'
               }
             }}
-            redirectUrl="/dashboard"
-            signInUrl="/sign-in"
+            fallbackRedirectUrl="/dashboard" 
+            signInFallbackRedirectUrl="/dashboard"
           />
 
           <div className="mt-6 text-center text-xs text-gray-500">
