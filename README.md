@@ -78,8 +78,8 @@ CropGuard AI is a full-stack web application that helps farmers identify plant d
 **Backend:**
 - Next.js API Routes
 - Groq AI Vision API
-- Supabase (PostgreSQL)
-- Supabase Storage
+- MongoDB Atlas (Database)
+- Cloudinary (Image Storage)
 
 **Deployment:**
 - Vercel
@@ -104,8 +104,8 @@ Clerk Auth → Protected Routes
 Next.js API Routes (Serverless)
     ↓
 ├─ Groq AI (Disease Detection)
-├─ Supabase DB (Scan History)
-└─ Supabase Storage (Images)
+├─ MongoDB Atlas (Scan History)
+└─ Cloudinary (Image Storage)
 ```
 
 ## ✅ Prerequisites
@@ -113,7 +113,8 @@ Next.js API Routes (Serverless)
 - Node.js 18+ and npm
 - Git
 - Clerk account (free)
-- Supabase account (free)
+- MongoDB Atlas account (free)
+- Cloudinary account (free)
 - Groq API key (free)
 - Vercel account (free)
 - GitHub account
@@ -170,23 +171,33 @@ NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/dashboard
 NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/dashboard
 ```
 
-#### 2. Supabase (Database & Storage)
+#### 2. MongoDB Atlas (Database)
 
-1. Go to https://supabase.com
-2. Create new project
-3. Wait for database provisioning
-4. Go to Project Settings → API
-5. Copy URL and anon key
-6. Add to `.env.local`:
+1. Go to https://www.mongodb.com/cloud/atlas
+2. Create new project: "CropGuard AI"
+3. Create FREE shared cluster
+4. Create database user with read/write access
+5. Configure network access (allow all IPs for development)
+6. Get connection string and add to `.env.local`:
 
 ```env
-NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/cropguard-ai
 ```
 
-7. Run database setup SQL (see Database Schema section)
+#### 3. Cloudinary (Image Storage)
 
-#### 3. Groq AI (Disease Detection)
+1. Go to https://cloudinary.com
+2. Create free account (10GB storage included)
+3. Get credentials from dashboard
+4. Add to `.env.local`:
+
+```env
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
+```
+
+#### 4. Groq AI (Disease Detection)
 
 1. Go to https://console.groq.com
 2. Sign up with Google/GitHub
@@ -210,9 +221,13 @@ NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
 NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/dashboard
 NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/dashboard
 
-# Supabase
-NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+# MongoDB
+MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/cropguard-ai
+
+# Cloudinary
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
 
 # Groq
 GROQ_API_KEY=gsk_...
@@ -223,71 +238,55 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 
 ## 🗄️ Database Schema
 
-Run this SQL in Supabase SQL Editor:
+The application uses MongoDB with Mongoose ODM. Collections are automatically created when the application runs.
 
-```sql
--- Users table (handled by Clerk, store Clerk user_id)
-CREATE TABLE users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    clerk_user_id TEXT UNIQUE NOT NULL,
-    email TEXT,
-    created_at TIMESTAMP DEFAULT NOW(),
-    last_login TIMESTAMP
-);
-
--- Scans table
-CREATE TABLE scans (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    clerk_user_id TEXT NOT NULL,
-    image_url TEXT NOT NULL,
-    crop_type VARCHAR(100),
-    disease_detected VARCHAR(200) NOT NULL,
-    confidence DECIMAL(5,4) NOT NULL,
-    severity VARCHAR(20),
-    symptoms JSONB,
-    treatment JSONB,
-    prevention JSONB,
-    organic_treatment JSONB,
-    cost_estimate TEXT,
-    scientific_name TEXT,
-    created_at TIMESTAMP DEFAULT NOW()
-);
-
--- Create indexes
-CREATE INDEX idx_scans_user ON scans(clerk_user_id);
-CREATE INDEX idx_scans_created ON scans(created_at DESC);
-CREATE INDEX idx_scans_disease ON scans(disease_detected);
-
--- Enable RLS
-ALTER TABLE scans ENABLE ROW LEVEL SECURITY;
-
--- RLS Policies (Note: Adjust these for your specific Clerk setup)
-CREATE POLICY "Users can view own scans"
-    ON scans FOR SELECT
-    USING (clerk_user_id = auth.jwt() ->> 'sub');
-
-CREATE POLICY "Users can insert own scans"
-    ON scans FOR INSERT
-    WITH CHECK (clerk_user_id = auth.jwt() ->> 'sub');
-
-CREATE POLICY "Users can delete own scans"
-    ON scans FOR DELETE
-    USING (clerk_user_id = auth.jwt() ->> 'sub');
-
--- Storage bucket
-INSERT INTO storage.buckets (id, name, public)
-VALUES ('scan-images', 'scan-images', true);
-
--- Storage policies
-CREATE POLICY "Authenticated users can upload"
-    ON storage.objects FOR INSERT
-    WITH CHECK (bucket_id = 'scan-images' AND auth.role() = 'authenticated');
-
-CREATE POLICY "Public read access"
-    ON storage.objects FOR SELECT
-    USING (bucket_id = 'scan-images');
+### Users Collection
+```javascript
+{
+  _id: ObjectId,
+  clerkUserId: String (unique, indexed),
+  email: String (indexed),
+  firstName: String,
+  lastName: String,
+  imageUrl: String,
+  createdAt: Date,
+  lastLogin: Date
+}
 ```
+
+### Scans Collection
+```javascript
+{
+  _id: ObjectId,
+  clerkUserId: String (indexed),
+  imageUrl: String,
+  imagePublicId: String, // Cloudinary public ID for deletion
+  cropType: String, // Enum: ['Tomato', 'Potato', 'Corn', ...]
+  diseaseDetected: String (indexed),
+  confidence: Number, // 0-100
+  severity: String, // Enum: ['None', 'Mild', 'Moderate', 'Severe']
+  symptoms: [String],
+  treatment: [String],
+  prevention: [String],
+  organicTreatment: [String],
+  costEstimate: String,
+  scientificName: String,
+  createdAt: Date (auto-generated),
+  updatedAt: Date (auto-generated)
+}
+```
+
+### Database Indexes (automatically created)
+- `clerkUserId` (Users and Scans collections)
+- `email` (Users collection)
+- `createdAt` descending (Scans collection)
+- `diseaseDetected` (Scans collection)
+- `severity` (Scans collection)
+- `cropType` (Scans collection)
+- Text search index on `diseaseDetected`, `symptoms`, and `cropType`
+- Compound indexes for efficient queries
+
+**No manual setup required** - Mongoose automatically creates collections and indexes on first use.
 
 ## 🚢 Deployment to Vercel
 
@@ -312,8 +311,10 @@ git push origin main
 6. Add Environment Variables (click "Environment Variables"):
    - NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
    - CLERK_SECRET_KEY
-   - NEXT_PUBLIC_SUPABASE_URL
-   - NEXT_PUBLIC_SUPABASE_ANON_KEY
+   - MONGODB_URI
+   - CLOUDINARY_CLOUD_NAME
+   - CLOUDINARY_API_KEY
+   - CLOUDINARY_API_SECRET
    - GROQ_API_KEY
    - (and all other Clerk URLs)
 
@@ -530,16 +531,16 @@ cropguard-ai-web/
 4. Clear browser cookies and try again
 5. Verify NEXT_PUBLIC_ prefix on public keys
 
-### Issue: Images not uploading to Supabase
+### Issue: Images not uploading to Cloudinary
 
 **Symptoms:** Upload fails, 404 on image URLs
 
 **Solutions:**
-1. Verify storage bucket exists: `scan-images`
-2. Check bucket is public
-3. Verify storage policies are set (run SQL again)
-4. Check file size is under 10MB
-5. Verify NEXT_PUBLIC_SUPABASE_URL is correct
+1. Verify Cloudinary credentials are correct
+2. Check API key has upload permissions
+3. Verify file size is under 10MB
+4. Check Cloudinary dashboard for upload errors
+5. Verify CLOUDINARY_CLOUD_NAME is correct
 
 ### Issue: Groq API errors
 
@@ -558,7 +559,7 @@ cropguard-ai-web/
 → Add environment variable in Vercel or .env.local
 
 **"Failed to fetch scans"**
-→ Check Supabase connection and RLS policies
+→ Check MongoDB connection string and network access
 
 **"Image too large"**
 → Reduce image size or increase limit

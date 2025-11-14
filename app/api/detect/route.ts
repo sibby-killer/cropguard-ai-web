@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { detectDisease } from '@/lib/groq-client'
 import { getDiseaseByName } from '@/lib/disease-database'
-import { db } from '@/lib/supabase'
+import { db } from '@/lib/database'
 import { generateId } from '@/lib/utils'
 import sharp from 'sharp'
 
@@ -80,15 +80,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Upload image to Supabase Storage
-    const fileName = `${userId}/${generateId()}.jpg`
+    // Upload image to Cloudinary
+    const fileName = `${userId}_${generateId()}`
     let imageUrl = ''
+    let imagePublicId = ''
     
     try {
-      imageUrl = await db.uploadImage(
-        new File([processedBuffer], fileName, { type: 'image/jpeg' }),
-        fileName
-      )
+      const uploadResult = await db.uploadImage(processedBuffer, fileName)
+      imageUrl = uploadResult.url
+      imagePublicId = uploadResult.publicId
     } catch (uploadError) {
       console.error('Image upload error:', uploadError)
       imageUrl = 'https://via.placeholder.com/400x300?text=Image+Upload+Failed'
@@ -98,18 +98,19 @@ export async function POST(request: NextRequest) {
     let scanRecord
     try {
       scanRecord = await db.createScan({
-        clerk_user_id: userId,
-        image_url: imageUrl,
-        crop_type: cropType,
-        disease_detected: aiResult.disease_detected,
+        clerkUserId: userId,
+        imageUrl: imageUrl,
+        imagePublicId: imagePublicId,
+        cropType: cropType,
+        diseaseDetected: aiResult.disease_detected,
         confidence: aiResult.confidence,
         severity: aiResult.severity,
         symptoms: diseaseInfo.symptoms,
         treatment: diseaseInfo.treatment,
         prevention: diseaseInfo.prevention,
-        organic_treatment: diseaseInfo.organic_treatment,
-        cost_estimate: diseaseInfo.cost_estimate,
-        scientific_name: diseaseInfo.scientific_name
+        organicTreatment: diseaseInfo.organic_treatment,
+        costEstimate: diseaseInfo.cost_estimate,
+        scientificName: diseaseInfo.scientific_name
       })
     } catch (dbError) {
       console.error('Database error:', dbError)
@@ -120,7 +121,7 @@ export async function POST(request: NextRequest) {
     // Return comprehensive response
     const response = {
       success: true,
-      scan_id: scanRecord.id,
+      scan_id: scanRecord._id?.toString() || scanRecord.id,
       disease: aiResult.disease_detected,
       confidence: Math.round(aiResult.confidence * 100) / 100,
       severity: aiResult.severity,
