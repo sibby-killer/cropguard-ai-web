@@ -50,7 +50,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Convert file to buffer
-    const buffer = Buffer.from(await imageFile.arrayBuffer())
+    const arrayBuffer = await imageFile.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
 
     // Process image with Sharp
     let processedBuffer = buffer
