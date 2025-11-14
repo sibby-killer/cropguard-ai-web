@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   title: "CropGuard AI - Plant Disease Detection",
   description: "AI-powered plant disease detection for farmers worldwide. Upload a photo and get instant diagnosis with treatment recommendations.",
   keywords: ["plant disease", "agriculture", "AI", "farming", "crop protection", "disease detection"],
-  authors: [{ name: "Alfred Nyongesa", email: "alfred.dev8@gmail.com" }],
+  authors: [{ name: "Alfred Nyongesa" }],
   creator: "Alfred Nyongesa (sibby-killer)",
   publisher: "CropGuard AI",
   robots: "index, follow",

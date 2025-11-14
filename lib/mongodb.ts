@@ -17,15 +17,11 @@ type CachedConnection = {
   promise: Promise<typeof mongoose> | null
 }
 
-// Use global cache
-declare const global: {
-  mongoose: CachedConnection | undefined
-}
-
-let cached = global.mongoose
+// Use global cache with proper typing
+let cached = (globalThis as any).mongoose as CachedConnection | undefined
 
 if (!cached) {
-  cached = global.mongoose = { conn: null, promise: null }
+  cached = (globalThis as any).mongoose = { conn: null, promise: null }
 }
 
 async function connectDB() {
