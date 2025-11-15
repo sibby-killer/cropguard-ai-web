@@ -18,6 +18,15 @@ export async function GET() {
           length: process.env.GROQ_API_KEY?.length || 0,
           starts_with_gsk: process.env.GROQ_API_KEY?.startsWith('gsk_') || false
         },
+        huggingface_api_key: {
+          present: !!process.env.HUGGINGFACE_API_KEY,
+          length: process.env.HUGGINGFACE_API_KEY?.length || 0,
+          starts_with_hf: process.env.HUGGINGFACE_API_KEY?.startsWith('hf_') || false
+        },
+        huggingface_model: {
+          present: !!process.env.HUGGINGFACE_MODEL_ID,
+          value: process.env.HUGGINGFACE_MODEL_ID || 'not_set'
+        },
         mongodb_uri: {
           present: !!process.env.MONGODB_URI,
           length: process.env.MONGODB_URI?.length || 0,
@@ -56,6 +65,9 @@ export async function GET() {
       recommendations: [
         ...(debug.env_vars.groq_api_key.length === 0 ? ['❌ GROQ_API_KEY is missing'] : []),
         ...(debug.env_vars.groq_api_key.present && !debug.env_vars.groq_api_key.starts_with_gsk ? ['❌ GROQ_API_KEY should start with gsk_'] : []),
+        ...(debug.env_vars.huggingface_api_key.length === 0 ? ['⚠️ HUGGINGFACE_API_KEY is missing (fallback model)'] : []),
+        ...(debug.env_vars.huggingface_api_key.present && !debug.env_vars.huggingface_api_key.starts_with_hf ? ['⚠️ HUGGINGFACE_API_KEY should start with hf_'] : []),
+        ...(!debug.env_vars.huggingface_model.present ? ['⚠️ HUGGINGFACE_MODEL_ID is missing (fallback model)'] : []),
         ...(debug.env_vars.mongodb_uri.length === 0 ? ['❌ MONGODB_URI is missing'] : []),
         ...(debug.env_vars.mongodb_uri.present && !debug.env_vars.mongodb_uri.starts_with_mongodb ? ['❌ MONGODB_URI should start with mongodb://'] : []),
         ...(!debug.env_vars.cloudinary.cloud_name ? ['❌ CLOUDINARY_CLOUD_NAME is missing'] : []),
