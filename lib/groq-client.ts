@@ -11,6 +11,7 @@ export interface GroqDetectionResponse {
   severity: 'None' | 'Mild' | 'Moderate' | 'Severe'
   symptoms_observed: string[]
   recommendation: string
+  crop_analysis?: string
 }
 
 /**
@@ -21,42 +22,44 @@ export async function detectDisease(
   cropType: string = 'Tomato'
 ): Promise<GroqDetectionResponse> {
   try {
-    console.log('🔍 Analyzing image with Groq Vision...')
+    console.log(`🔍 Analyzing ${cropType} image with Groq Vision...`)
     
     // Try Groq Vision first
-    const prompt = `You are an expert plant pathologist. Analyze this ${cropType} plant image for diseases.
+    const prompt = `You are an expert plant pathologist analyzing a ${cropType} plant image.
 
-CRITICAL: Respond ONLY with valid JSON. No markdown, no explanation, no additional text.
+INSTRUCTIONS:
+1. First, confirm this is actually a ${cropType} plant in the image
+2. If it's NOT a ${cropType}, mention the actual crop you see
+3. Look carefully for disease symptoms - don't guess or make up diseases
+4. If the plant looks healthy, say "Healthy Plant" - don't invent problems
+5. Only diagnose diseases you can clearly see evidence for
 
+RESPOND ONLY in valid JSON format:
 {
-  "disease_detected": "exact disease name or 'Healthy Plant'",
+  "disease_detected": "specific disease name or 'Healthy Plant'",
   "confidence": 0.95,
-  "severity": "None|Mild|Moderate|Severe",
-  "symptoms_observed": ["specific symptom 1", "symptom 2"],
-  "recommendation": "brief treatment advice in 1 sentence"
+  "severity": "None|Mild|Moderate|Severe", 
+  "symptoms_observed": ["actual visible symptoms"],
+  "recommendation": "practical treatment advice",
+  "crop_analysis": "This is a [crop name]. [Brief description of what you see]"
 }
 
-Common ${cropType} diseases to look for:
-- Late Blight (dark water-soaked spots, white mold on undersides)
-- Early Blight (concentric ring spots on leaves)
-- Septoria Leaf Spot (small circular spots with gray centers)
-- Bacterial Spot (small dark lesions with yellow halos)
-- Leaf Mold (yellowish spots with olive-green mold underneath)
-- Mosaic Virus (mottled yellowing patterns)
-- Powdery Mildew (white powder coating on leaves)
-- Target Spot (circular rings resembling targets)
-- Yellow Leaf Curl Virus (upward curling leaves)
-- Healthy Plant (no visible symptoms)
+Common ${cropType} diseases (only diagnose if clearly visible):
+- Early Blight: Brown spots with concentric rings on older leaves
+- Late Blight: Dark, water-soaked lesions spreading rapidly
+- Septoria Leaf Spot: Small circular spots with gray centers and dark borders
+- Bacterial Spot: Small dark spots with yellow halos
+- Mosaic Virus: Mottled yellow-green pattern on leaves
+- Powdery Mildew: White powdery coating on leaves
+- Leaf Curl: Leaves curling upward or downward abnormally
 
-Analysis criteria:
-- Look for: leaf discoloration, spots, mold, curling, lesions, overall health
-- Consider: spot patterns, colors, distribution, leaf condition
-- If no clear disease symptoms are visible, classify as "Healthy Plant"
-- Be specific about disease names from the list above
-- Confidence should reflect certainty of diagnosis (0.0 to 1.0)
-- Severity: None (healthy), Mild (early stage), Moderate (noticeable), Severe (advanced)
+IMPORTANT: 
+- If you see a healthy plant, say "Healthy Plant" with confidence 0.8-0.9
+- If you're unsure, lower the confidence score accordingly
+- Don't diagnose diseases unless you can clearly see the symptoms
+- Start your crop_analysis with "This is a [crop type]" and describe what you observe
 
-Examine the image carefully and provide your analysis as valid JSON only.`
+Analyze the image carefully and be honest about what you see.`
 
     const completion = await groq.chat.completions.create({
       messages: [

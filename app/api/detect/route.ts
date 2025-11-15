@@ -145,7 +145,7 @@ export async function POST(request: NextRequest) {
       disease: aiResult.disease_detected,
       confidence: Math.round(aiResult.confidence * 100) / 100,
       severity: aiResult.severity,
-      description: diseaseInfo.description,
+      description: aiResult.crop_analysis || diseaseInfo.description,
       symptoms: diseaseInfo.symptoms,
       treatment: diseaseInfo.treatment,
       prevention: diseaseInfo.prevention,

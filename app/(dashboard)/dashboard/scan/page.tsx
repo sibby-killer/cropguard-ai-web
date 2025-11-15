@@ -24,6 +24,15 @@ import { CROP_TYPES, SEVERITY_COLORS } from '@/types'
 import { CurrencySelector, PriceDisplay } from '@/components/shared/currency-selector'
 import { useCurrency } from '@/lib/hooks/use-currency'
 import { convertPrice } from '@/lib/currency-converter'
+import { 
+  validatePlantImage, 
+  validateCropMatch, 
+  getCropSuggestions, 
+  validateCustomCrop,
+  SUPPORTED_CROPS,
+  type ImageValidationResult,
+  type CropMatchResult
+} from '@/lib/image-validator'
 import Image from 'next/image'
 import confetti from 'canvas-confetti'
 
@@ -122,13 +131,19 @@ export default function ScanPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [cropType, setCropType] = useState('Tomato')
+  const [customCrop, setCustomCrop] = useState('')
+  const [showCustomInput, setShowCustomInput] = useState(false)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [progress, setProgress] = useState(0)
   const [result, setResult] = useState<ScanResult | null>(null)
   const [activeTab, setActiveTab] = useState('overview')
+  const [imageValidation, setImageValidation] = useState<ImageValidationResult | null>(null)
+  const [cropMatch, setCropMatch] = useState<CropMatchResult | null>(null)
+  const [isValidatingImage, setIsValidatingImage] = useState(false)
+  const [cropSuggestions, setCropSuggestions] = useState<string[]>([])
   const { selectedCurrency } = useCurrency()
 
-  const onDrop = useCallback((acceptedFiles: File[]) => {
+  const onDrop = useCallback(async (acceptedFiles: File[]) => {
     const file = acceptedFiles[0]
     if (!file) return
 
@@ -141,8 +156,57 @@ export default function ScanPage() {
     setSelectedFile(file)
     setPreviewUrl(URL.createObjectURL(file))
     setResult(null)
-    toast.success('Image uploaded successfully!')
-  }, [])
+    setImageValidation(null)
+    setCropMatch(null)
+
+    // Convert to base64 for validation
+    const reader = new FileReader()
+    reader.onload = async (e) => {
+      const base64 = e.target?.result as string
+      
+      // Validate if the image contains a plant
+      setIsValidatingImage(true)
+      try {
+        const plantValidation = await validatePlantImage(base64)
+        setImageValidation(plantValidation)
+        
+        if (!plantValidation.isValid || !plantValidation.isPlant) {
+          toast.error("This doesn't look like a plant or crop image. Please upload a clear image of a plant, fruit, or vegetable.", {
+            duration: 5000
+          })
+        } else {
+          toast.success('Image uploaded successfully!')
+          
+          if (plantValidation.detectedCrop) {
+            // Check if detected crop matches selected crop
+            const currentCrop = showCustomInput ? customCrop : cropType
+            const matchResult = validateCropMatch(currentCrop, plantValidation.detectedCrop)
+            setCropMatch(matchResult)
+            
+            if (!matchResult.matches) {
+              toast.error(matchResult.message, { duration: 5000 })
+            } else {
+              toast.success(matchResult.message, { duration: 3000 })
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Image validation failed:', error)
+        // Allow analysis if validation fails
+        setImageValidation({
+          isValid: true,
+          isPlant: true,
+          detectedCrop: null,
+          confidence: 50,
+          error: "Could not validate image"
+        })
+        toast.success('Image uploaded successfully!')
+      } finally {
+        setIsValidatingImage(false)
+      }
+    }
+    reader.readAsDataURL(file)
+  }, [cropType, customCrop, showCustomInput])
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -173,7 +237,10 @@ export default function ScanPage() {
     try {
       const formData = new FormData()
       formData.append('image', selectedFile)
-      formData.append('crop_type', cropType)
+      
+      // Use custom crop if available, otherwise use selected crop
+      const finalCropType = showCustomInput && customCrop.trim() ? customCrop.trim() : cropType
+      formData.append('crop_type', finalCropType)
 
       const response = await fetch('/api/detect', {
         method: 'POST',
@@ -300,30 +367,194 @@ export default function ScanPage() {
           {/* Crop Selection */}
           <Card>
             <CardHeader>
-              <CardTitle>Crop Type (Optional)</CardTitle>
+              <CardTitle>Crop Type</CardTitle>
               <CardDescription>
-                Select your crop type for more accurate results
+                Select your crop type for more accurate results, or add a custom one
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <select
-                value={cropType}
-                onChange={(e) => setCropType(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-              >
-                {CROP_TYPES.map((crop) => (
-                  <option key={crop} value={crop}>
-                    {crop}
-                  </option>
-                ))}
-              </select>
+            <CardContent className="space-y-4">
+              {!showCustomInput ? (
+                <div className="space-y-3">
+                  <select
+                    value={cropType}
+                    onChange={(e) => {
+                      if (e.target.value === 'custom') {
+                        setShowCustomInput(true)
+                        setCustomCrop('')
+                      } else {
+                        setCropType(e.target.value)
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                  >
+                    {CROP_TYPES.map((crop) => (
+                      <option key={crop} value={crop}>
+                        {crop}
+                      </option>
+                    ))}
+                    <option value="custom">➕ Add Custom Crop</option>
+                  </select>
+                  
+                  {imageValidation?.detectedCrop && cropMatch && (
+                    <div className={`p-3 rounded-lg ${
+                      cropMatch.matches ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
+                    }`}>
+                      <div className="flex items-center gap-2">
+                        {cropMatch.matches ? (
+                          <CheckCircle className="w-4 h-4 text-green-600" />
+                        ) : (
+                          <AlertTriangle className="w-4 h-4 text-red-600" />
+                        )}
+                        <span className={`text-sm font-medium ${
+                          cropMatch.matches ? 'text-green-800' : 'text-red-800'
+                        }`}>
+                          Detected: {imageValidation.detectedCrop}
+                        </span>
+                      </div>
+                      <p className={`text-xs mt-1 ${
+                        cropMatch.matches ? 'text-green-700' : 'text-red-700'
+                      }`}>
+                        {cropMatch.message}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={customCrop}
+                      onChange={(e) => {
+                        setCustomCrop(e.target.value)
+                        if (e.target.value.length >= 2) {
+                          const suggestions = getCropSuggestions(e.target.value)
+                          setCropSuggestions(suggestions)
+                        } else {
+                          setCropSuggestions([])
+                        }
+                      }}
+                      placeholder="Enter crop name (e.g., Mango, Avocado)"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setShowCustomInput(false)
+                        setCustomCrop('')
+                        setCropSuggestions([])
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                  
+                  {cropSuggestions.length > 0 && (
+                    <div className="border border-gray-200 rounded-md">
+                      <div className="px-3 py-2 bg-gray-50 border-b text-xs font-medium text-gray-700">
+                        Suggestions:
+                      </div>
+                      {cropSuggestions.map((suggestion, index) => (
+                        <button
+                          key={index}
+                          onClick={() => {
+                            setCropType(suggestion)
+                            setShowCustomInput(false)
+                            setCustomCrop('')
+                            setCropSuggestions([])
+                            toast.success(`Selected ${suggestion}`)
+                          }}
+                          className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 border-b last:border-b-0"
+                        >
+                          {suggestion}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  
+                  {customCrop && (
+                    <div className="text-xs text-gray-600">
+                      Custom crop "{customCrop}" will be analyzed with general plant disease detection.
+                    </div>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
+
+          {/* Validation Status */}
+          {isValidatingImage && (
+            <Card className="border-blue-200 bg-blue-50">
+              <CardContent className="py-4">
+                <div className="flex items-center gap-3">
+                  <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
+                  <div>
+                    <p className="font-medium text-blue-800">Validating Image...</p>
+                    <p className="text-sm text-blue-600">Checking if image contains a plant or crop</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Error Messages */}
+          {imageValidation && !imageValidation.isValid && (
+            <Card className="border-red-200 bg-red-50">
+              <CardContent className="py-4">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-red-800">Invalid Image Detected</p>
+                    <p className="text-sm text-red-600 mb-2">
+                      This doesn't appear to be a plant, crop, fruit, or vegetable image.
+                    </p>
+                    {imageValidation.suggestions && imageValidation.suggestions.length > 0 && (
+                      <ul className="text-sm text-red-700 space-y-1">
+                        {imageValidation.suggestions.map((suggestion, index) => (
+                          <li key={index} className="flex items-start">
+                            <span className="mr-2">•</span>
+                            {suggestion}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Crop Mismatch Error */}
+          {cropMatch && !cropMatch.matches && (
+            <Card className="border-orange-200 bg-orange-50">
+              <CardContent className="py-4">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 text-orange-600 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-orange-800">Crop Mismatch Detected!</p>
+                    <p className="text-sm text-orange-700">
+                      {cropMatch.message}
+                    </p>
+                    <p className="text-xs text-orange-600 mt-1">
+                      Please select the correct crop type or upload an image that matches your selection.
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Analyze Button */}
           <Button
             onClick={analyzeImage}
-            disabled={!selectedFile || isAnalyzing}
+            disabled={
+              !selectedFile || 
+              isAnalyzing || 
+              isValidatingImage ||
+              (imageValidation && !imageValidation.isValid) ||
+              (cropMatch && !cropMatch.matches)
+            }
             size="lg"
             className="w-full"
           >
@@ -331,6 +562,21 @@ export default function ScanPage() {
               <>
                 <Loader2 className="w-5 h-5 mr-2 animate-spin" />
                 Analyzing...
+              </>
+            ) : isValidatingImage ? (
+              <>
+                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                Validating...
+              </>
+            ) : (imageValidation && !imageValidation.isValid) ? (
+              <>
+                <AlertTriangle className="w-5 h-5 mr-2" />
+                Upload Valid Plant Image
+              </>
+            ) : (cropMatch && !cropMatch.matches) ? (
+              <>
+                <AlertTriangle className="w-5 h-5 mr-2" />
+                Fix Crop Mismatch
               </>
             ) : (
               <>
