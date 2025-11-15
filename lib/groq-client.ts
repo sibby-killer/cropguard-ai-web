@@ -76,7 +76,7 @@ Examine the image carefully and provide your analysis as valid JSON only.`
           ]
         }
       ],
-      model: "llama-3.2-11b-vision-preview", // Use vision model
+      model: "llama-3.2-11b-vision-preview", // Vision model - fallback to HF if decommissioned
       temperature: 0.1,
       max_tokens: 1024,
       top_p: 1,
@@ -129,6 +129,11 @@ Examine the image carefully and provide your analysis as valid JSON only.`
 
   } catch (error) {
     console.error('❌ Groq Vision failed:', error)
+    
+    // Check if it's a model decommissioning error
+    if (error instanceof Error && error.message.includes('decommissioned')) {
+      console.log('🔄 Groq vision model has been decommissioned, using fallback...')
+    }
     
     // Fallback to Hugging Face model
     console.log('🔄 Falling back to Hugging Face model...')
@@ -196,7 +201,7 @@ export async function testGroqConnection(): Promise<boolean> {
           content: "Respond with just the word 'success'"
         }
       ],
-      model: "llama-3.2-90b-text-preview",
+      model: "llama-3.1-70b-versatile", // Updated to supported model
       max_tokens: 10,
       temperature: 0
     })
