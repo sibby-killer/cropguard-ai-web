@@ -148,7 +148,7 @@ export async function testGroqConnection(): Promise<boolean> {
           content: "Respond with just the word 'success'"
         }
       ],
-      model: "llama-3.2-90b-vision-preview",
+      model: "llama-3.2-11b-vision-preview",
       max_tokens: 10,
       temperature: 0
     })
