@@ -7,6 +7,26 @@ AI-powered plant disease detection for farmers worldwide. Built with Next.js 14,
 **Live Demo:** https://cropguard-ai-web.vercel.app  
 **Repository:** https://github.com/sibby-killer/cropguard-ai-web
 
+---
+
+## 📊 **View Our Pitch Deck**
+
+### **[🚀 CropGuard AI - Complete Pitch Presentation](https://gamma.app/docs/CropGuard-AI-3avwp7t6scogbi3)**
+
+*Click above to view our comprehensive pitch deck showcasing the problem, solution, market opportunity, and business model. The presentation includes market analysis, competitive landscape, and our vision for revolutionizing agriculture through AI.*
+
+> **💡 Quick Preview:** Our solution addresses the $220B annual crop loss due to diseases, offering instant AI diagnosis that's 95%+ accurate, available in 20+ currencies, and accessible to 2.6B farmers worldwide through any smartphone.
+
+**📋 What's in the Pitch Deck:**
+- 🌍 Global agriculture challenges and market size ($4T+ industry)
+- 🔬 Our AI-powered solution and technology stack
+- 📈 Business model and revenue streams
+- 🎯 Go-to-market strategy and user acquisition
+- 💰 Financial projections and funding requirements
+- 🚀 Product roadmap and future vision
+
+---
+
 ## 🎯 Overview
 
 CropGuard AI is a full-stack web application that helps farmers identify plant diseases using artificial intelligence. Simply upload a photo of your crop, and get instant diagnosis with treatment recommendations.
