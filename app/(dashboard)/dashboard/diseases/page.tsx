@@ -11,15 +11,76 @@ import { SEVERITY_COLORS, CROP_TYPES } from '@/types'
 import { getAllDiseases } from '@/lib/disease-database'
 
 export default function DiseasesPage() {
-  const [diseases] = useState(getAllDiseases())
-  const [filteredDiseases, setFilteredDiseases] = useState(getAllDiseases())
+  const [diseases, setDiseases] = useState<any[]>([])
+  const [filteredDiseases, setFilteredDiseases] = useState<any[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCrop, setSelectedCrop] = useState('')
   const [selectedDisease, setSelectedDisease] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetchDiseaseData()
+  }, [])
 
   useEffect(() => {
     filterDiseases()
-  }, [searchTerm, selectedCrop])
+  }, [searchTerm, selectedCrop, diseases])
+
+  const fetchDiseaseData = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      
+      // Fetch both static diseases and real user scan data
+      const [staticDiseases, scanResponse] = await Promise.all([
+        getAllDiseases(),
+        fetch('/api/diseases')
+      ])
+      
+      if (!scanResponse.ok) {
+        throw new Error('Failed to fetch scan data')
+      }
+      
+      const scanData = await scanResponse.json()
+      
+      // Combine static diseases with real scan data
+      const allDiseases = [
+        ...staticDiseases,
+        ...scanData.diseases.map((disease: any) => ({
+          ...disease,
+          isUserGenerated: true,
+          scanCount: disease.scan_count || 1
+        }))
+      ]
+      
+      // Remove duplicates by disease name, keeping the one with more scan data
+      const uniqueDiseases = allDiseases.reduce((acc: any[], current: any) => {
+        const existing = acc.find(d => d.name.toLowerCase() === current.name.toLowerCase())
+        
+        if (!existing) {
+          acc.push(current)
+        } else if (current.isUserGenerated && current.scanCount > (existing.scanCount || 0)) {
+          // Replace with user-generated data if it has more scans
+          const index = acc.indexOf(existing)
+          acc[index] = current
+        }
+        
+        return acc
+      }, [])
+      
+      setDiseases(uniqueDiseases)
+    } catch (error) {
+      console.error('Error fetching disease data:', error)
+      setError('Failed to load disease database. Please try again.')
+      
+      // Fallback to static diseases only
+      const staticDiseases = getAllDiseases()
+      setDiseases(staticDiseases)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const filterDiseases = () => {
     let filtered = diseases

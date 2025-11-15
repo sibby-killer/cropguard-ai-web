@@ -23,52 +23,16 @@ import { SEVERITY_COLORS, CROP_TYPES } from '@/types'
 import type { Scan } from '@/types'
 import Image from 'next/image'
 
-// Mock data - replace with real API calls
-const mockScans: Scan[] = [
-  {
-    id: '1',
-    user_id: 'user1',
-    clerk_user_id: 'user1',
-    image_url: '/placeholder-plant.jpg',
-    crop_type: 'Tomato',
-    disease_detected: 'Early Blight',
-    confidence: 94.5,
-    severity: 'Moderate',
-    symptoms: ['Brown spots', 'Leaf yellowing'],
-    treatment: ['Apply fungicide', 'Remove affected leaves'],
-    prevention: ['Improve air circulation', 'Water at soil level'],
-    organic_treatment: ['Copper spray', 'Compost tea'],
-    cost_estimate: '$15-35 per acre',
-    scientific_name: 'Alternaria solani',
-    created_at: '2024-11-10T10:30:00Z'
-  },
-  {
-    id: '2',
-    user_id: 'user1', 
-    clerk_user_id: 'user1',
-    image_url: '/placeholder-plant.jpg',
-    crop_type: 'Potato',
-    disease_detected: 'Healthy Plant',
-    confidence: 98.2,
-    severity: 'None',
-    symptoms: [],
-    treatment: ['Continue monitoring'],
-    prevention: ['Maintain good practices'],
-    organic_treatment: ['No treatment needed'],
-    cost_estimate: 'No cost',
-    scientific_name: 'N/A',
-    created_at: '2024-11-08T14:15:00Z'
-  }
-]
 
 export default function HistoryPage() {
-  const [scans, setScans] = useState<Scan[]>(mockScans)
-  const [filteredScans, setFilteredScans] = useState<Scan[]>(mockScans)
+  const [scans, setScans] = useState<Scan[]>([])
+  const [filteredScans, setFilteredScans] = useState<Scan[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCrop, setSelectedCrop] = useState('')
   const [selectedSeverity, setSelectedSeverity] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const itemsPerPage = 12
   const totalPages = Math.ceil(filteredScans.length / itemsPerPage)
@@ -77,9 +41,35 @@ export default function HistoryPage() {
     currentPage * itemsPerPage
   )
 
+  // Fetch real scan history on component mount
+  useEffect(() => {
+    fetchScanHistory()
+  }, [])
+
+  // Filter scans when search/filter criteria change
   useEffect(() => {
     filterScans()
   }, [searchTerm, selectedCrop, selectedSeverity, scans])
+
+  const fetchScanHistory = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      
+      const response = await fetch('/api/history')
+      if (!response.ok) {
+        throw new Error('Failed to fetch scan history')
+      }
+      
+      const data = await response.json()
+      setScans(data.scans || [])
+    } catch (error) {
+      console.error('Error fetching scan history:', error)
+      setError('Failed to load scan history. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const filterScans = () => {
     let filtered = scans
@@ -229,9 +219,37 @@ export default function HistoryPage() {
         </p>
       </div>
 
+      {/* Loading State */}
+      {loading && (
+        <Card className="text-center py-12">
+          <CardContent>
+            <div className="flex items-center justify-center mb-4">
+              <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+            </div>
+            <p className="text-gray-600">Loading your scan history...</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Error State */}
+      {error && !loading && (
+        <Card className="text-center py-12 border-red-200 bg-red-50">
+          <CardContent>
+            <div className="text-red-600 mb-4">
+              <FileX className="w-16 h-16 mx-auto mb-2" />
+              <h3 className="text-lg font-medium">Error Loading History</h3>
+            </div>
+            <p className="text-red-700 mb-4">{error}</p>
+            <Button onClick={fetchScanHistory} variant="outline">
+              Try Again
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Scans Grid */}
       <AnimatePresence mode="wait">
-        {filteredScans.length === 0 ? (
+        {!loading && !error && filteredScans.length === 0 ? (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -269,21 +287,42 @@ export default function HistoryPage() {
                 <Card className="overflow-hidden hover:shadow-lg transition-shadow">
                   {/* Image */}
                   <div className="relative h-48 bg-gradient-to-br from-green-50 to-emerald-50">
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="text-center">
-                        <div className="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-2">
-                          <span className="text-lg font-bold text-primary">
-                            {scan.crop_type?.substring(0, 2) || 'PL'}
-                          </span>
+                    {scan.image_url ? (
+                      <Image
+                        src={scan.image_url}
+                        alt={`${scan.crop_type} - ${scan.disease_detected}`}
+                        fill
+                        className="object-cover"
+                        onError={(e) => {
+                          // Fallback to placeholder on error
+                          const target = e.target as HTMLImageElement
+                          target.style.display = 'none'
+                        }}
+                      />
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="text-center">
+                          <div className="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-2">
+                            <span className="text-lg font-bold text-primary">
+                              {scan.crop_type?.substring(0, 2) || 'PL'}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-600">{scan.crop_type}</p>
                         </div>
-                        <p className="text-sm text-gray-600">{scan.crop_type}</p>
                       </div>
-                    </div>
+                    )}
                     
                     {/* Confidence badge */}
                     <div className="absolute top-3 right-3">
                       <Badge variant="secondary" className="bg-white/90">
                         {scan.confidence}%
+                      </Badge>
+                    </div>
+                    
+                    {/* Crop type overlay */}
+                    <div className="absolute bottom-3 left-3">
+                      <Badge variant="outline" className="bg-white/90">
+                        {scan.crop_type}
                       </Badge>
                     </div>
                   </div>
