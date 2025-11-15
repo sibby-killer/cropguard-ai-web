@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -14,14 +14,91 @@ import {
   AlertTriangle,
   Download,
   Share,
-  RotateCcw
+  RotateCcw,
+  Globe
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import { validateImageFile, formatFileSize } from '@/lib/utils'
 import { CROP_TYPES, SEVERITY_COLORS } from '@/types'
+import { CurrencySelector, PriceDisplay } from '@/components/shared/currency-selector'
+import { useCurrency } from '@/lib/hooks/use-currency'
+import { convertPrice } from '@/lib/currency-converter'
 import Image from 'next/image'
 import confetti from 'canvas-confetti'
+
+// Helper function to parse cost estimate and extract USD amount
+function parseCostEstimate(costString: string): { min: number; max: number; unit: string } {
+  // Parse strings like "$20-50 per acre", "$15-35 per acre for treatment", etc.
+  const match = costString.match(/\$(\d+)-(\d+)\s*(.*)/)
+  if (match) {
+    return {
+      min: parseInt(match[1]),
+      max: parseInt(match[2]),
+      unit: match[3].trim()
+    }
+  }
+  
+  // Fallback for other formats
+  const singleMatch = costString.match(/\$(\d+)\s*(.*)/)
+  if (singleMatch) {
+    const amount = parseInt(singleMatch[1])
+    return {
+      min: amount,
+      max: amount,
+      unit: singleMatch[2].trim()
+    }
+  }
+  
+  return { min: 20, max: 50, unit: 'per acre' } // Default fallback
+}
+
+// Component to convert and display costs in different currencies
+function CostConverter({ originalCost, currency }: { originalCost: string; currency: any }) {
+  const [convertedCost, setConvertedCost] = useState<string>('')
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    const convertCost = async () => {
+      try {
+        const parsed = parseCostEstimate(originalCost)
+        
+        // Convert both min and max amounts
+        const minConverted = await convertPrice(parsed.min, currency.code)
+        const maxConverted = await convertPrice(parsed.max, currency.code)
+        
+        // Extract just the number from the converted price
+        const minAmount = parseFloat(minConverted.replace(/[^\d.]/g, ''))
+        const maxAmount = parseFloat(maxConverted.replace(/[^\d.]/g, ''))
+        
+        const formatted = `${currency.symbol}${Math.round(minAmount)}-${Math.round(maxAmount)} ${parsed.unit}`
+        setConvertedCost(formatted)
+      } catch (error) {
+        console.error('Failed to convert cost:', error)
+        setConvertedCost(`${currency.symbol}${originalCost.replace('$', '')}`)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    convertCost()
+  }, [originalCost, currency])
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2">
+        <div className="w-4 h-4 border-2 border-gray-300 border-t-primary rounded-full animate-spin"></div>
+        <span className="text-sm text-gray-500">Converting...</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="text-xl font-bold text-primary">
+      {convertedCost}
+    </div>
+  )
+}
 
 interface ScanResult {
   success: boolean
@@ -49,6 +126,7 @@ export default function ScanPage() {
   const [progress, setProgress] = useState(0)
   const [result, setResult] = useState<ScanResult | null>(null)
   const [activeTab, setActiveTab] = useState('overview')
+  const { selectedCurrency } = useCurrency()
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0]
@@ -450,13 +528,44 @@ export default function ScanPage() {
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0, y: -10 }}
                         >
-                          <h4 className="font-semibold mb-3">Estimated Treatment Cost</h4>
-                          <div className="bg-gray-50 rounded-lg p-4">
-                            <p className="text-2xl font-bold text-primary mb-2">{result.cost_estimate}</p>
-                            <p className="text-sm text-gray-600">
-                              Cost may vary based on farm size, location, and chosen treatment method. 
-                              Consider organic alternatives for potentially lower costs.
-                            </p>
+                          <div className="flex items-center justify-between mb-3">
+                            <h4 className="font-semibold">Estimated Treatment Cost</h4>
+                            <div className="flex items-center gap-2">
+                              <Globe className="w-4 h-4 text-gray-400" />
+                              <CurrencySelector className="text-xs" />
+                            </div>
+                          </div>
+                          <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm text-gray-600">Original (USD):</span>
+                              <span className="text-lg font-medium">{result.cost_estimate}</span>
+                            </div>
+                            
+                            {selectedCurrency.code !== 'USD' && (
+                              <div className="border-t pt-3">
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-sm text-gray-600">
+                                    In {selectedCurrency.name} ({selectedCurrency.flag}):
+                                  </span>
+                                </div>
+                                <CostConverter 
+                                  originalCost={result.cost_estimate}
+                                  currency={selectedCurrency}
+                                />
+                              </div>
+                            )}
+                            
+                            <div className="border-t pt-3">
+                              <p className="text-sm text-gray-600">
+                                Cost may vary based on farm size, location, and chosen treatment method. 
+                                Consider organic alternatives for potentially lower costs.
+                              </p>
+                              {selectedCurrency.code !== 'USD' && (
+                                <p className="text-xs text-gray-500 mt-2">
+                                  * Converted using current exchange rates. Actual costs may vary.
+                                </p>
+                              )}
+                            </div>
                           </div>
                         </motion.div>
                       )}

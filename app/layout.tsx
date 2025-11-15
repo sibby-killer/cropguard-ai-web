@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import { ClerkProvider } from '@clerk/nextjs'
+import { CurrencyProvider } from '@/lib/hooks/use-currency'
 import "./globals.css"
 import { Toaster } from "sonner"
 
@@ -75,11 +76,13 @@ export default function RootLayout({
           <meta name="theme-color" content="#10B981" />
         </head>
         <body className="min-h-screen bg-background font-sans antialiased">
-          <div className="relative flex min-h-screen flex-col">
-            <main className="flex-1">
-              {children}
-            </main>
-          </div>
+          <CurrencyProvider>
+            <div className="relative flex min-h-screen flex-col">
+              <main className="flex-1">
+                {children}
+              </main>
+            </div>
+          </CurrencyProvider>
           <Toaster
             position="top-right"
             toastOptions={{
