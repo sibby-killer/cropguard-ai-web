@@ -32,51 +32,38 @@ export default function DiseasesPage() {
       setLoading(true)
       setError(null)
       
-      // Fetch both static diseases and real user scan data
-      const [staticDiseases, scanResponse] = await Promise.all([
-        getAllDiseases(),
-        fetch('/api/diseases')
-      ])
+      // Fetch disease data from API (includes both static and user-generated data)
+      const response = await fetch('/api/diseases')
       
-      if (!scanResponse.ok) {
-        throw new Error('Failed to fetch scan data')
+      if (!response.ok) {
+        throw new Error('Failed to fetch disease data')
       }
       
-      const scanData = await scanResponse.json()
+      const data = await response.json()
       
-      // Combine static diseases with real scan data
-      const allDiseases = [
-        ...staticDiseases,
-        ...scanData.diseases.map((disease: any) => ({
-          ...disease,
-          isUserGenerated: true,
-          scanCount: disease.scan_count || 1
-        }))
-      ]
+      if (data.success) {
+        // Use the combined diseases from the API
+        setDiseases(data.diseases || [])
+      } else {
+        throw new Error(data.error || 'Failed to load diseases')
+      }
       
-      // Remove duplicates by disease name, keeping the one with more scan data
-      const uniqueDiseases = allDiseases.reduce((acc: any[], current: any) => {
-        const existing = acc.find(d => d.name.toLowerCase() === current.name.toLowerCase())
-        
-        if (!existing) {
-          acc.push(current)
-        } else if (current.isUserGenerated && current.scanCount > (existing.scanCount || 0)) {
-          // Replace with user-generated data if it has more scans
-          const index = acc.indexOf(existing)
-          acc[index] = current
-        }
-        
-        return acc
-      }, [])
-      
-      setDiseases(uniqueDiseases)
     } catch (error) {
       console.error('Error fetching disease data:', error)
       setError('Failed to load disease database. Please try again.')
       
       // Fallback to static diseases only
-      const staticDiseases = getAllDiseases()
-      setDiseases(staticDiseases)
+      try {
+        const staticDiseases = getAllDiseases()
+        setDiseases(staticDiseases.map(disease => ({
+          ...disease,
+          isUserGenerated: false,
+          scan_count: 0
+        })))
+      } catch (staticError) {
+        console.error('Error loading static diseases:', staticError)
+        setDiseases([])
+      }
     } finally {
       setLoading(false)
     }
@@ -146,11 +133,40 @@ export default function DiseasesPage() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Disease List */}
-        <div className="lg:col-span-2">
-          <div className="grid gap-4">
-            {filteredDiseases.map((disease, index) => (
+      {/* Loading State */}
+      {loading && (
+        <Card className="text-center py-12">
+          <CardContent>
+            <div className="flex items-center justify-center mb-4">
+              <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+            </div>
+            <p className="text-gray-600">Loading disease database...</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Error State */}
+      {error && !loading && (
+        <Card className="text-center py-12 border-red-200 bg-red-50">
+          <CardContent>
+            <div className="text-red-600 mb-4">
+              <Book className="w-16 h-16 mx-auto mb-2" />
+              <h3 className="text-lg font-medium">Error Loading Database</h3>
+            </div>
+            <p className="text-red-700 mb-4">{error}</p>
+            <Button onClick={fetchDiseaseData} variant="outline">
+              Try Again
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {!loading && !error && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Disease List */}
+          <div className="lg:col-span-2">
+            <div className="grid gap-4">
+              {filteredDiseases.map((disease, index) => (
               <motion.div
                 key={disease.name}
                 initial={{ opacity: 0, y: 20 }}
@@ -282,7 +298,7 @@ export default function DiseasesPage() {
             </Card>
           )}
         </div>
-      </div>
+      )}
     </div>
   )
 }

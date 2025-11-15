@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAllDiseases, getDiseasesByCrop, searchDiseases } from '@/lib/disease-database'
-import { connectToDatabase } from '@/lib/mongodb'
+import connectDB from '@/lib/mongodb'
 import { Scan } from '@/lib/models/Scan'
 
 export const runtime = 'nodejs'
@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
     const sort = searchParams.get('sort') || 'scan_count'
 
     // Connect to database and fetch real scan data
-    await connectToDatabase()
+    await connectDB()
     
     // Aggregate disease data from real user scans
     const diseaseAggregation = await Scan.aggregate([
