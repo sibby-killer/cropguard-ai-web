@@ -2,44 +2,67 @@
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Eye, Calendar, Target } from 'lucide-react'
+import { Eye, Calendar, Target, Loader2, XCircle } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 import { SEVERITY_COLORS } from '@/types'
 import Link from 'next/link'
+import { useState, useEffect } from 'react'
 
-// Mock data - replace with real data from API
-const mockScans = [
-  {
-    id: '1',
-    disease_detected: 'Early Blight',
-    confidence: 94.5,
-    severity: 'Moderate' as const,
-    crop_type: 'Tomato',
-    created_at: '2024-11-10T10:30:00Z',
-    image_url: '/placeholder-plant.jpg'
-  },
-  {
-    id: '2',
-    disease_detected: 'Healthy Plant',
-    confidence: 98.2,
-    severity: 'None' as const,
-    crop_type: 'Potato',
-    created_at: '2024-11-08T14:15:00Z',
-    image_url: '/placeholder-plant.jpg'
-  },
-  {
-    id: '3',
-    disease_detected: 'Late Blight',
-    confidence: 91.7,
-    severity: 'Severe' as const,
-    crop_type: 'Tomato',
-    created_at: '2024-11-05T09:45:00Z',
-    image_url: '/placeholder-plant.jpg'
-  }
-]
+interface Scan {
+  id: string
+  disease_detected: string
+  confidence: number
+  severity: 'None' | 'Mild' | 'Moderate' | 'Severe'
+  crop_type: string
+  created_at: string
+  image_url: string
+}
 
 export function RecentScans() {
-  if (mockScans.length === 0) {
+  const [scans, setScans] = useState<Scan[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const fetchRecentScans = async () => {
+      try {
+        const response = await fetch('/api/scans/recent')
+        if (!response.ok) {
+          throw new Error('Failed to fetch scans')
+        }
+        const data = await response.json()
+        setScans(data)
+      } catch (err) {
+        setError('Failed to load recent scans')
+        console.error('Error fetching recent scans:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchRecentScans()
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="text-center py-8">
+        <Loader2 className="w-8 h-8 animate-spin text-gray-400 mx-auto mb-4" />
+        <p className="text-gray-500">Loading recent scans...</p>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-8 text-red-600">
+        <XCircle className="w-8 h-8 mx-auto mb-4" />
+        <h3 className="text-lg font-medium mb-2">Error</h3>
+        <p>{error}</p>
+      </div>
+    )
+  }
+
+  if (scans.length === 0) {
     return (
       <div className="text-center py-8">
         <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -56,7 +79,7 @@ export function RecentScans() {
 
   return (
     <div className="space-y-4">
-      {mockScans.map((scan) => (
+      {scans.map((scan) => (
         <div
           key={scan.id}
           className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
@@ -68,13 +91,13 @@ export function RecentScans() {
                 {scan.crop_type.substring(0, 2)}
               </span>
             </div>
-            
+
             <div className="flex-1 min-w-0">
               <div className="flex items-center space-x-2 mb-1">
                 <h4 className="text-sm font-medium text-gray-900 truncate">
                   {scan.disease_detected}
                 </h4>
-                <Badge 
+                <Badge
                   variant={scan.severity === 'None' ? 'success' : 'default'}
                   className={SEVERITY_COLORS[scan.severity]}
                 >

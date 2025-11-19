@@ -3,47 +3,47 @@
 import { useUser } from '@clerk/nextjs'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Camera, TrendingUp, Calendar, Target, ArrowUpRight } from 'lucide-react'
+import { Camera, TrendingUp, Calendar, Target, ArrowUpRight, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { StatsCard } from '@/components/dashboard/stats-card'
 import { RecentScans } from '@/components/dashboard/recent-scans'
 import { motion } from 'framer-motion'
+import { useState, useEffect } from 'react'
 
-const quickStats = [
-  {
-    title: 'Total Scans',
-    value: '24',
-    change: '+12% from last month',
-    icon: Camera,
-    trend: 'up' as const
-  },
-  {
-    title: 'Detection Accuracy',
-    value: '96.2%',
-    change: '+2.1% this week',
-    icon: Target,
-    trend: 'up' as const
-  },
-  {
-    title: 'Last Scan',
-    value: '2 days ago',
-    change: 'Tomato - Healthy',
-    icon: Calendar,
-    trend: 'neutral' as const
-  },
-  {
-    title: 'Crops Monitored',
-    value: '3 Types',
-    change: 'Tomato, Potato, Corn',
-    icon: TrendingUp,
-    trend: 'neutral' as const
-  }
-]
+
+interface Stats {
+  total_scans: number
+  average_confidence: number
+  last_scan_date: string | null
+  crops_monitored: string[]
+}
 
 export default function DashboardPage() {
   const { user, isLoaded } = useUser()
+  const [stats, setStats] = useState<Stats | null>(null)
+  const [loadingStats, setLoadingStats] = useState(true)
 
-  if (!isLoaded) {
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const response = await fetch('/api/stats')
+        if (response.ok) {
+          const data = await response.json()
+          setStats(data.stats)
+        }
+      } catch (error) {
+        console.error('Failed to fetch stats:', error)
+      } finally {
+        setLoadingStats(false)
+      }
+    }
+
+    if (isLoaded) {
+      fetchStats()
+    }
+  }, [isLoaded])
+
+  if (!isLoaded || loadingStats) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="animate-pulse space-y-6">
@@ -60,18 +60,52 @@ export default function DashboardPage() {
 
   const firstName = user?.firstName || 'Farmer'
 
+  // Calculate quick stats from real data
+  const quickStats = [
+    {
+      title: 'Total Scans',
+      value: stats?.total_scans.toString() || '0',
+      change: stats?.total_scans ? `${stats.total_scans} scans completed` : 'No scans yet',
+      icon: Camera,
+      trend: 'neutral' as const
+    },
+    {
+      title: 'Detection Accuracy',
+      value: stats?.average_confidence ? `${stats.average_confidence.toFixed(1)}%` : 'N/A',
+      change: stats?.average_confidence ? 'Average confidence' : 'No data yet',
+      icon: Target,
+      trend: 'neutral' as const
+    },
+    {
+      title: 'Last Scan',
+      value: stats?.last_scan_date
+        ? new Date(stats.last_scan_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+        : 'Never',
+      change: stats?.last_scan_date ? 'Most recent analysis' : 'Upload your first scan',
+      icon: Calendar,
+      trend: 'neutral' as const
+    },
+    {
+      title: 'Crops Monitored',
+      value: stats?.crops_monitored?.length ? `${stats.crops_monitored.length} Types` : '0 Types',
+      change: stats?.crops_monitored?.length ? stats.crops_monitored.slice(0, 2).join(', ') : 'No crops yet',
+      icon: TrendingUp,
+      trend: 'neutral' as const
+    }
+  ]
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       {/* Header */}
       <div className="mb-8">
-        <motion.h1 
+        <motion.h1
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="text-2xl md:text-3xl font-bold text-gray-900"
         >
           Welcome back, {firstName}! 👋
         </motion.h1>
-        <motion.p 
+        <motion.p
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
@@ -82,7 +116,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Quick Actions */}
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
@@ -127,7 +161,7 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Recent Scans */}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.7 }}
@@ -152,7 +186,7 @@ export default function DashboardPage() {
         </motion.div>
 
         {/* Tips & Insights */}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.8 }}
@@ -197,13 +231,16 @@ export default function DashboardPage() {
               <div className="space-y-3">
                 <div className="flex justify-between text-sm">
                   <span>Scans this month</span>
-                  <span className="font-medium">24/∞</span>
+                  <span className="font-medium">{stats?.total_scans || 0}/∞</span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div className="bg-primary h-2 rounded-full" style={{ width: '60%' }}></div>
+                  <div
+                    className="bg-primary h-2 rounded-full"
+                    style={{ width: `${Math.min((stats?.total_scans || 0) * 10, 100)}%` }}
+                  ></div>
                 </div>
                 <p className="text-xs text-gray-600">
-                  Great progress! You're actively monitoring your crops.
+                  {stats?.total_scans ? 'Great progress! You\'re actively monitoring your crops.' : 'Start scanning to track your progress!'}
                 </p>
               </div>
             </CardContent>
